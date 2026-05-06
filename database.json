@@ -1,0 +1,51 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "name": "Sweetcorn",
+      "price": 4000,
+      "emoji": "🍨",
+      "description": "Rasa Jagung Yang Lezatt",
+      "stock": 40,
+      "modal": 2450
+    },
+    {
+      "id": 2,
+      "name": "Choco Malt",
+      "price": 3000,
+      "emoji": "🍫",
+      "description": "Cokelat premium yang nikmat",
+      "stock": 40,
+      "modal": 1900
+    },
+    {
+      "id": 3,
+      "name": "Nanas",
+      "price": 2500,
+      "emoji": "🍓",
+      "description": "Rasa buah nanas segar",
+      "stock": 30,
+      "modal": 1600
+    },
+    {
+      "id": 4,
+      "name": "Mochi Coklat",
+      "price": 4000,
+      "emoji": "🍵",
+      "description": "Rasa coklat yang mewah",
+      "stock": 20,
+      "modal": 2450
+    },
+    {
+      "id": 5,
+      "name": "Mochi Vanilla",
+      "price": 4000,
+      "emoji": "🌿",
+      "description": "Rasa Vanilla yang menyegarkan",
+      "stock": 20,
+      "modal": 2450
+    }
+  ],
+  "lastUpdated": "2026-05-06",
+  "notes": "File ini adalah SOURCE OF TRUTH untuk stok awal produk dan modal. Ubah nilai 'stock' untuk mengatur stok dan 'modal' untuk harga modal/cost. Stok akan dimuat dari file ini setiap kali halaman dibuka, dan berkurang saat checkout sesuai localStorage. Keuntungan dihitung dari (price - modal) * terjual."
+}
