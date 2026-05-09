@@ -306,6 +306,30 @@
         <h2>🛒 Keranjang Belanja</h2>
         <div id="cartItems" style="max-height:300px;overflow-y:auto;"></div>
         <div class="cart-total">Total: <span id="cartTotal">Rp 0</span></div>
+        <!-- Bagian di dalam Cart Modal (sebelum tombol checkout) -->
+<div class="payment-method-selector" style="margin: 1rem 0; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+    <p style="font-weight: bold; margin-bottom: 0.5rem;">Pilih Metode Pembayaran:</p>
+    <label style="margin-right: 15px; cursor: pointer;">
+        <input type="radio" name="paymentMethod" value="Cash" checked> 💵 Cash
+    </label>
+    <label style="cursor: pointer;">
+        <input type="radio" name="paymentMethod" value="QRIS"> 📱 QRIS
+    </label>
+</div>
+
+<!-- Modal Khusus Gambar QRIS -->
+<div id="qrisModal" class="modal" style="display:none; z-index: 2000;">
+    <div class="modal-content" style="text-align: center; max-width: 400px;">
+        <h3>Pembayaran QRIS</h3>
+        <p id="qrisTotalText" style="font-weight: bold; font-size: 1.2rem; color: #667eea;"></p>
+        <!-- Ganti URL src dengan link foto QRIS Anda -->
+        <img src="qris.jpeg" 
+             id="qrisImage" alt="QRIS Code" style="width: 100%; max-width: 250px; margin: 15px 0;">
+        <p style="font-size: 0.8rem; color: #666;">Silakan scan dan lakukan pembayaran.</p>
+        <button class="add-to-cart-btn" onclick="confirmQrisPayment()" style="width: 100%;">Sudah Bayar & Konfirmasi</button>
+        <button class="cart-item-remove" onclick="closeQrisModal()" style="margin-top: 10px; background: none; border: none; color: #dc3545;">Batal</button>
+    </div>
+</div>
         <button class="checkout-btn" onclick="checkout()">Lanjut ke Pembayaran</button>
     </div>
 </div>
@@ -704,12 +728,44 @@ window.removeFromCart = function(productId) {
     updateCartCount(); openCart();
 };
 
+// Variable global untuk menyimpan data checkout sementara saat pakai QRIS
+let pendingCheckoutData = null;
+
 window.checkout = async function() {
     if (cart.length === 0) { showNotify('❌ Keranjang kosong!', '#dc3545'); return; }
+    
     const total = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-    showLoading(true, 'Memproses pembayaran...');
+    const method = document.querySelector('input[name="paymentMethod"]:checked').value;
+
+    if (method === 'QRIS') {
+        // Tampilkan Modal QRIS terlebih dahulu
+        document.getElementById('qrisTotalText').textContent = rp(total);
+        document.getElementById('qrisModal').style.display = 'block';
+        // Simpan data untuk diproses setelah user klik "Konfirmasi"
+        pendingCheckoutData = { total, method };
+    } else {
+        // Langsung proses jika Cash
+        executeTransaction(total, 'Cash');
+    }
+};
+
+window.closeQrisModal = function() {
+    document.getElementById('qrisModal').style.display = 'none';
+    pendingCheckoutData = null;
+};
+
+window.confirmQrisPayment = function() {
+    if (pendingCheckoutData) {
+        executeTransaction(pendingCheckoutData.total, 'QRIS');
+        closeQrisModal();
+    }
+};
+
+// Fungsi inti untuk menyimpan ke Firebase
+async function executeTransaction(total, method) {
+    showLoading(true, 'Memproses pembayaran ' + method + '...');
     try {
-        // Kurangi stok
+        // 1. Kurangi stok
         const stockUpdates = {};
         cart.forEach(ci => {
             const p = products.find(p => p.id === ci.id);
@@ -717,7 +773,7 @@ window.checkout = async function() {
         });
         await update(ref(db), stockUpdates);
 
-        // Update sales
+        // 2. Update sales
         const salesSnap = await get(ref(db, 'sales'));
         const salesData = salesSnap.exists() ? salesSnap.val() : {};
         cart.forEach(item => {
@@ -726,23 +782,24 @@ window.checkout = async function() {
         });
         await set(ref(db, 'sales'), salesData);
 
-        // Simpan transaksi (timestamp lokal agar dashboard hari ini akurat)
+        // 3. Simpan transaksi dengan field 'paymentMethod'
         await push(ref(db, 'transactions'), {
             items: cart.map(i => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price })),
             total,
+            paymentMethod: method, // Tambahan field
             timestamp: new Date().toISOString()
         });
 
         showLoading(false);
-        alert('✅ Pesanan dikonfirmasi!\n\nTotal: ' + rp(total) + '\n\nTerima kasih!');
+        alert(`✅ Pesanan Berhasil (${method})!\nTotal: ${rp(total)}\n\nTerima kasih!`);
         cart = [];
         updateCartCount();
         closeCart();
     } catch (err) {
         showLoading(false);
-        showNotify('❌ Checkout gagal: ' + err.message, '#dc3545');
+        showNotify('❌ Transaksi gagal: ' + err.message, '#dc3545');
     }
-};
+}
 
 // ── LAPORAN ───────────────────────────────────────────────────────────────────
 function renderProfitTable(salesData) {
