@@ -210,8 +210,17 @@
 <!-- ── DASHBOARD HARI INI ── -->
 <section class="dashboard" id="dashboard">
     <div class="container">
-        <h2 class="section-title">📈 Dashboard Hari Ini</h2>
-        <p class="dashboard-subtitle" id="dashboardDate">—</p>
+        <h2 class="section-title">📈 Dashboard</h2>
+
+        <!-- Navigasi Tanggal -->
+        <div id="dateNavBar" style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:1.5rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 16px;">
+            <button id="prevDayBtn" onclick="changeDashboardDay(-1)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;">◀ Kemarin</button>
+            <div id="dashboardDate" style="flex:1;text-align:center;color:white;font-size:15px;font-weight:bold;">—</div>
+            <button id="todayDayBtn" onclick="goTodayDashboard()" style="background:#667eea;border:none;color:white;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:12px;" disabled>Hari Ini</button>
+            <button id="nextDayBtn" onclick="changeDashboardDay(1)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;" disabled>Besok ▶</button>
+        </div>
+
+        <p class="dashboard-subtitle" id="dashboardDateSub">—</p>
 
         <!-- Stat Cards -->
         <div class="stats-row">
@@ -363,6 +372,7 @@ const DEFAULT_PRODUCTS = [
 let products = [], cart = [], db;
 let hourlyChart = null;
 let allTransactions = {}; // cache semua tx dari Firebase
+let dashboardOffset = 0; // 0 = hari ini, -1 = kemarin, dst
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function showNotify(msg, color = '#333') {
@@ -548,24 +558,31 @@ window.resetStockToDefault = async function() {
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard() {
-    const today = todayStr();
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + dashboardOffset);
+    const targetStr = targetDate.getFullYear() + '-' +
+        String(targetDate.getMonth()+1).padStart(2,'0') + '-' +
+        String(targetDate.getDate()).padStart(2,'0');
 
-    // Set tanggal header
-    const now = new Date();
     const dayNames = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
     const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-    const label = `${dayNames[now.getDay()]}, ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+    const label = `${dayNames[targetDate.getDay()]}, ${targetDate.getDate()} ${monthNames[targetDate.getMonth()]} ${targetDate.getFullYear()}`;
+
     document.getElementById('dashboardDate').textContent = label;
     document.getElementById('chartDateLabel').textContent = label;
 
-    // Filter transaksi hari ini
-    const txList = Object.values(allTransactions).filter(tx => getLocalDateFromISO(tx.timestamp) === today);
+    // Update tombol nav
+    document.getElementById('prevDayBtn').disabled = dashboardOffset <= -30;
+    document.getElementById('nextDayBtn').disabled = dashboardOffset >= 0;
+    document.getElementById('todayDayBtn').disabled = dashboardOffset === 0;
+
+    // Filter transaksi sesuai tanggal yang dipilih
+    const txList = Object.values(allTransactions).filter(tx => getLocalDateFromISO(tx.timestamp) === targetStr);
     txList.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // ── Hitung statistik ──
     let totalRevenue = 0, totalItems = 0;
-    const productSales = {}; // { name: qty }
-    const hourlyRevenue = Array(24).fill(0); // indeks = jam
+    const productSales = {};
+    const hourlyRevenue = Array(24).fill(0);
 
     txList.forEach(tx => {
         totalRevenue += tx.total;
@@ -577,29 +594,33 @@ function renderDashboard() {
         });
     });
 
-    // Peak hour
     let peakHour = -1, peakVal = 0;
     hourlyRevenue.forEach((v, h) => { if (v > peakVal) { peakVal = v; peakHour = h; } });
 
-    // Top product
     let topProduct = '—', topQty = 0;
     Object.entries(productSales).forEach(([name, qty]) => { if (qty > topQty) { topQty = qty; topProduct = name; } });
 
-    // ── Update stat cards ──
     document.getElementById('statTodayRevenue').textContent = rp(totalRevenue);
     document.getElementById('statTodayTx').textContent = txList.length + ' transaksi';
     document.getElementById('statTodayItems').textContent = totalItems;
     document.getElementById('statPeakHour').textContent = peakHour >= 0 ? String(peakHour).padStart(2,'0') + ':00' : '—';
     document.getElementById('statPeakSales').textContent = peakHour >= 0 ? rp(peakVal) : 'Belum ada';
     document.getElementById('statTopProduct').textContent = topProduct;
-    document.getElementById('statTopProductSub').textContent = topQty > 0 ? topQty + ' terjual hari ini' : 'Belum ada';
+    document.getElementById('statTopProductSub').textContent = topQty > 0 ? topQty + ' terjual' : 'Belum ada';
 
-    // ── Grafik 24 jam ──
     renderHourlyChart(hourlyRevenue);
-
-    // ── Tabel transaksi ──
     renderTodayTxTable(txList);
 }
+
+window.changeDashboardDay = function(delta) {
+    dashboardOffset = Math.max(-30, Math.min(0, dashboardOffset + delta));
+    renderDashboard();
+};
+
+window.goTodayDashboard = function() {
+    dashboardOffset = 0;
+    renderDashboard();
+};
 
 function renderHourlyChart(hourlyRevenue) {
     const labels = Array.from({length: 24}, (_, i) => String(i).padStart(2,'0') + ':00');
